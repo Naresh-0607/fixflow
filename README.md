@@ -28,23 +28,32 @@ Only public Python repositories hosted on GitHub are supported.
 
 ```text
 GitHub repository URL
-        ↓
+        |
+        v
 Create isolated job workspace
-        ↓
+        |
+        v
 Clone repository and detect Python project
-        ↓
+        |
+        v
 Generate controlled Docker environment
-        ↓
+        |
+        v
 Install dependencies and run complete pytest suite
-        ↓
+        |
+        v
 Read authoritative counts from JUnit XML
-        ↓
+        |
+        v
 Collect failure names, messages, and traces from pytest output
-        ↓
+        |
+        v
 Select relevant tests and source files
-        ↓
+        |
+        v
 Gemini root-cause analysis
-        ↓
+        |
+        v
 Structured API response
 ```
 
@@ -52,22 +61,28 @@ Structured API response
 
 ```text
 Initial analysis
-        ↓
+        |
+        v
 Gemini proposes minimal unified diffs
-        ↓
+        |
+        v
 Validate paths, file types, patch size, and patch structure
-        ↓
+        |
+        v
 Apply changes transactionally inside the job repository
-        ↓
+        |
+        v
 Rebuild and run the complete pytest suite in Docker
-        ↓
+        |
+        v
 Compare previous and current results
-        ↓
-  ┌─────────────┬───────────────┬──────────────┐
-  │ tests pass  │ result better │ regression   │
-  ↓             ↓               ↓
-Complete      Reflect and      Restore exact pre-iteration files
-              continue         and request a different repair
+        |
+        +-- tests pass -----> Complete
+        |
+        +-- result better --> Reflect and continue
+        |
+        +-- regression -----> Restore exact pre-iteration files,
+                              then request a different repair
 ```
 
 The loop stops when all tests pass, the configured iteration limit is reached,
@@ -80,10 +95,10 @@ Each request receives a unique job ID and uses this layout:
 
 ```text
 workspaces/<job-id>/
-├── repository/                  cloned repository and accepted working changes
-├── artifacts/junit.xml         pytest result counts
-├── FixFlow.Dockerfile           generated test environment
-└── FixFlow.Dockerfile.dockerignore
+|-- repository/                  cloned repository and accepted working changes
+|-- artifacts/junit.xml         pytest result counts
+|-- FixFlow.Dockerfile           generated test environment
+`-- FixFlow.Dockerfile.dockerignore
 ```
 
 The Docker and artifact files stay outside `repository/`, so they cannot affect
@@ -99,12 +114,21 @@ directly by the FixFlow host; dependency installation and pytest run in Docker.
 
 ## Setup
 
-From the `FixFlow` directory:
+From the `FixFlow` directory on Windows PowerShell:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 Copy-Item .env.example .env
+```
+
+From WSL/Linux:
+
+```bash
+python3 -m venv .venv-wsl
+source .venv-wsl/bin/activate
+python -m pip install -r requirements.txt
+cp .env.example .env
 ```
 
 Set `GEMINI_API_KEY` in `.env`. FixFlow loads the project-level file once when
@@ -129,7 +153,7 @@ Never commit the key; `.env` is ignored.
 From WSL/Linux, restrict reload watching to the application source directory:
 
 ```bash
-source .venv/bin/activate
+source .venv-wsl/bin/activate
 uvicorn app.main:app --reload --reload-dir app
 ```
 
@@ -149,104 +173,163 @@ On Windows PowerShell, the equivalent development command is:
 .\.venv\Scripts\uvicorn.exe app.main:app --reload --reload-dir app
 ```
 
-Open `http://127.0.0.1:8000/docs` or send a request:
+## Use the application
+
+- Dashboard: `http://127.0.0.1:8000/`
+- Interactive API documentation: `http://127.0.0.1:8000/docs`
+- Health check: `GET http://127.0.0.1:8000/health`
+
+The dashboard is plain HTML, CSS, and JavaScript served by FastAPI. It has no
+Node dependency, build step, or separate frontend process.
+
+### Analyze a repository
+
+Send a public GitHub URL to `POST /api/analyze`:
 
 ```powershell
 $body = @{ repository_url = "https://github.com/user/project.git" } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/analyze" -ContentType "application/json" -Body $body
 ```
 
-The browser dashboard is available at `http://127.0.0.1:8000/`. It is plain
-HTML, local CSS, and vanilla JavaScript served by FastAPI, so there is no Node
-runtime, package installation, build command, or separate frontend server.
+The analysis endpoint never changes repository files. Its status is one of:
 
-Analysis and repair requests are synchronous. Every request receives a unique
-job ID and is stored under:
-
-```text
-workspaces/<job-id>/repository/
-```
-
-## Response behavior
-
-- `issues_found`: pytest failed and Gemini returned structured analysis.
-- `tests_passed`: all collected tests passed; Gemini is not called.
+- `issues_found`: tests failed and Gemini returned structured analysis.
+- `tests_passed`: all collected tests passed, so Gemini was not called.
 - `no_tests`: pytest collected no tests.
-- `analysis_failed`: pytest results are returned, but Gemini was unavailable or
-  returned invalid data.
+- `analysis_failed`: test results are available, but AI analysis was unavailable
+  or invalid.
 
-The response includes complete pytest stdout, stderr, combined output, exit
-code, counts, failed test identifiers, concise errors, and captured traces.
-Counts come from job-scoped JUnit XML artifacts outside the cloned repository;
-raw pytest output is retained only for failure identifiers and details.
+### Repair a repository
 
-Repair responses use these statuses:
-
-- `fixed`: all collected tests pass after one or more accepted repairs.
-- `already_passing`: the initial suite passed and Gemini was not called.
-- `partial`: the configurable iteration limit was reached with failures left.
-- `unsafe_change`: a path or patch failed safety validation before modification.
-- `gemini_unavailable`: bounded provider retries were exhausted.
-- `no_tests`: pytest collected no tests and no repair was attempted.
-
-Every repair response includes the initial commit/status/diff, initial and final
-test results, complete iteration history, accepted and rejected changes,
-modified files, additions, deletions, and the final uncommitted Git diff.
-
-Clone errors, unsupported repositories, Docker failures, dependency build
-failures, missing pytest, timeouts, and Gemini failures return explicit error
-messages. Workspaces are retained for Phase 1 inspection; generated Docker
-images and timed-out test containers are removed.
-
-Docker startup errors are deliberately distinct:
-
-- `docker_cli_unavailable`: no Docker executable was found on `PATH`.
-- `docker_daemon_unavailable`: the CLI exists, but `docker info` cannot reach
-  the daemon.
-- `docker_execution_failed`: pull, build, or container startup failed.
-- `docker_timeout`: a bounded Docker operation exceeded its timeout.
-
-## Security boundaries
-
-- Only HTTPS URLs on `github.com` with `owner/repository` paths are accepted.
-- Git prompts, Git LFS downloads, and local/file Git protocols are disabled.
-- Existing repository Dockerfiles are ignored; FixFlow generates its own.
-- Tests run with no network, bounded CPU/memory/PIDs, all Linux capabilities
-  dropped, and `no-new-privileges` enabled.
-- The repository is copied into an ephemeral image and is never host-executed.
-- Gemini receives complete pytest output plus a bounded, traceback-driven set
-  of relevant files rather than the whole repository.
-- Gemini never receives shell access. FixFlow exposes only bounded file listing,
-  reading, literal code search, patching, restoration, Git diff, and Docker test
-  operations confined to `workspaces/<job-id>/repository/`.
-- Absolute paths, traversal, symlinks, binary files, file creation/deletion,
-  renames, mode changes, oversized patches, and too many files per iteration are
-  rejected. Regressions restore exact pre-iteration file bytes.
-- FixFlow never commits, pushes, or opens a pull request.
-
-## Repair request
+Send the same request shape to `POST /api/repair`:
 
 ```powershell
 $body = @{ repository_url = "https://github.com/user/buggy-project.git" } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/repair" -ContentType "application/json" -Body $body
 ```
 
-The default repair limit is five iterations. Relevant environment settings are
-`MAX_ITERATIONS`, `MAX_FILES_PER_ITERATION`, `MAX_PATCH_CHARACTERS`,
-`GEMINI_MAX_RETRIES`, and `GEMINI_RETRY_BACKOFF_SECONDS`.
+Repair status values are:
 
-## Test FixFlow itself
+- `fixed`: every collected test passes after one or more accepted changes.
+- `already_passing`: the initial suite passed and no repair was needed.
+- `partial`: the iteration limit was reached with failures remaining.
+- `unsafe_change`: a proposed path or patch failed safety validation.
+- `gemini_unavailable`: primary and configured fallback attempts were exhausted.
+- `no_tests`: pytest collected no tests, so no repair was attempted.
+
+The response includes the initial commit and Git state, initial and final test
+results, every repair attempt, comparison classifications, accepted and rejected
+changes, modified files, additions, deletions, and the final uncommitted diff.
+
+Requests are synchronous: the HTTP request remains open while cloning, building,
+testing, analyzing, and—when requested—repairing the repository.
+
+## Test results and comparison
+
+Every Docker test run executes the complete suite with verbose output and writes
+JUnit XML to the job's external artifact directory. JUnit XML is the source of
+truth for total, passed, failed, skipped, and error counts. Raw stdout and stderr
+are retained for test identifiers, assertion messages, source locations, and
+tracebacks, so values such as HTTP status code `404` cannot corrupt statistics.
+
+After a repair, FixFlow classifies the result as:
+
+- `passed`: no failures or errors remain.
+- `improved`: fewer failures/errors, or more passing tests without regressions.
+- `unchanged`: the outcome did not improve or worsen.
+- `regressed`: failures increased, passing tests decreased, tests disappeared,
+  or pytest could not produce a valid result.
+
+Regressed changes are rejected and restored byte-for-byte before reflection.
+
+## Gemini reliability
+
+The shared Gemini client is used for root-cause analysis, repair generation, and
+reflection. It retries temporary failures with exponential backoff, then switches
+from `GEMINI_MODEL_PRIMARY` to `GEMINI_MODEL_FALLBACK` when configured. HTTP
+429/500/503/504 responses, request timeouts, and temporary network errors are
+eligible. Permanent request and authentication errors fail immediately.
+
+Gemini retries never rerun cloning, Docker builds, dependency installation, or
+pytest. Previously captured test results and source context are reused.
+
+## Main components
+
+- `app/api/` defines the analysis and repair HTTP endpoints.
+- `app/services/repository_service.py` validates GitHub URLs and creates jobs.
+- `app/services/docker_service.py` builds the controlled Python environment and
+  runs pytest with resource and security limits.
+- `app/services/pytest_service.py` parses JUnit counts and raw failure details.
+- `app/services/analysis_service.py` selects relevant code for diagnosis.
+- `app/llm/gemini_client.py` owns Gemini requests, retries, and model fallback.
+- `app/agent/repair_agent.py` creates structured repair and reflection prompts.
+- `app/tools/repository_tools.py` validates and applies transactional patches.
+- `app/services/repair_service.py` manages comparison, rollback, and iteration.
+
+## Configuration
+
+Execution limits can be changed with environment variables. Common settings are:
+
+- `MAX_ITERATIONS` — maximum autonomous repair attempts; default `5`.
+- `MAX_FILES_PER_ITERATION` — maximum files in one repair proposal.
+- `MAX_PATCH_CHARACTERS` — maximum combined patch size per iteration.
+- `GEMINI_MAX_RETRIES` — retries allowed for each configured Gemini model.
+- `GEMINI_RETRY_BACKOFF_SECONDS` — base exponential-backoff delay.
+- `DOCKER_RUN_TIMEOUT_SECONDS`, `DOCKER_MEMORY`, `DOCKER_CPUS`, and
+  `DOCKER_PIDS_LIMIT` — test execution boundaries.
+
+See `.env.example` for a ready-to-copy configuration template.
+
+## Error behavior
+
+Clone failures, unsupported repositories, Docker failures, dependency build
+failures, missing pytest, invalid JUnit results, timeouts, and Gemini failures
+produce structured errors or partial responses without discarding completed test
+results. Job workspaces remain available for inspection, while generated Docker
+images and timed-out containers are cleaned up.
+
+Docker startup errors are deliberately distinct:
+
+- `docker_cli_unavailable`: no Docker executable was found on `PATH`.
+- `docker_daemon_unavailable`: the CLI exists but cannot reach the daemon.
+- `docker_execution_failed`: pulling, building, or starting the container failed.
+- `docker_timeout`: a bounded Docker operation exceeded its timeout.
+
+## Security boundaries
+
+- Only public HTTPS `github.com/owner/repository` URLs are accepted.
+- Git prompts, Git LFS downloads, and local/file Git protocols are disabled.
+- Existing repository Dockerfiles are ignored; FixFlow generates its own.
+- Tests run without network access, with bounded CPU, memory, and process counts,
+  all Linux capabilities dropped, and `no-new-privileges` enabled.
+- Cloned code is copied into an ephemeral image and never host-executed.
+- Gemini receives a bounded, traceback-driven selection of relevant files and
+  never receives unrestricted shell access.
+- All file tools are confined to `workspaces/<job-id>/repository/`.
+- Absolute paths, traversal, symlinks, binary patches, file creation/deletion,
+  renames, mode changes, oversized patches, and excessive file counts are
+  rejected.
+- FixFlow never commits, pushes, or opens a pull request.
+
+## Run the test suite
 
 ```powershell
 .\.venv\Scripts\pytest.exe -v
 ```
 
-The tests mock remote cloning, Docker execution, and Gemini. Phase 2 patch tests
-use temporary local Git repositories to verify real diff application and exact
-rollback; they do not contact GitHub or invoke Docker.
+From WSL/Linux:
 
-## Current exclusions
+```bash
+source .venv-wsl/bin/activate
+pytest -v
+```
 
-There is no JavaScript/TypeScript or Java repository support, ZIP generation,
-GitHub push, automatic pull request, Ruff, or Bandit integration. The existing
-dashboard remains unchanged; autonomous repair is available through the API.
+Tests mock remote GitHub cloning, Docker execution, and Gemini requests. Patch
+and rollback tests use temporary local Git repositories to verify real unified
+diff application and exact restoration without contacting GitHub or Docker.
+
+## Scope and limitations
+
+FixFlow supports Python repositories and pytest. It does not currently support
+JavaScript/TypeScript or Java projects, ZIP generation, GitHub push, automatic
+pull requests, Ruff, or Bandit integration.
