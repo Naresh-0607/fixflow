@@ -12,17 +12,142 @@ inside that job's local workspace.
 
 ## What the application does
 
-FixFlow exposes two workflows:
+FixFlow exposes two repository workflows and a focused file workspace:
 
 - **Analyze** runs the repository's tests and returns structured root-cause
   analysis for every failure without changing source files.
 - **Repair** runs the same analysis, asks Gemini for bounded unified-diff
   changes, retests the entire suite, rolls back regressions, and reflects on
   remaining failures until the tests pass or a safe stop condition is reached.
+- **File workspace** opens an uploaded text/code file in the right-side editor,
+  performs a flaw analysis before enabling chat, applies only explicitly
+  requested edits, and lets the user download the revised browser copy.
 
-Only public Python repositories hosted on GitHub are supported.
+Repository analysis and repair support public Python repositories hosted on
+GitHub. The file workspace accepts the supported text and source-code formats
+shown in the upload panel and never executes uploaded content.
 
 ## Application flow
+
+### End-to-end user flow
+
+```mermaid
+flowchart TD
+    U([Developer / Judge]) --> UI[Open FixFlow dashboard]
+    UI --> CHOICE{Choose a workflow}
+
+    CHOICE -->|Repository| REPO[Submit public GitHub repository URL]
+    REPO --> API[FastAPI validates the request]
+    API --> JOB[Create isolated job and clone repository]
+    JOB --> DETECT[Detect Python project and dependencies]
+    DETECT --> DOCKER[Build controlled Docker environment]
+    DOCKER --> TEST[Run the complete pytest suite]
+    TEST --> MODE{Requested operation}
+    MODE -->|Analyze| ANALYZE[Gemini root-cause analysis]
+    MODE -->|Repair| REPAIR[Minimal patch and validation loop]
+    REPAIR --> RETEST[Retest and compare results]
+    RETEST -->|Improved, failures remain| REPAIR
+    RETEST -->|Passed or safe stop| RESULT[Tests, findings, diff, and final state]
+    ANALYZE --> RESULT
+    RESULT --> U
+
+    CHOICE -->|Single file| UPLOAD[Upload supported text or code file]
+    UPLOAD --> EDITOR[Load content in right-side editor]
+    EDITOR --> REVIEW[Automatic flaw analysis]
+    REVIEW --> CHAT[Enable questions and change requests]
+    CHAT --> ACTION{Assistant response}
+    ACTION -->|Question| ANSWER[Answer without changing editor content]
+    ACTION -->|Requested edit| EDIT[Apply complete validated revision]
+    ANSWER --> CHAT
+    EDIT --> CHAT
+    CHAT --> DOWNLOAD[Review and download revised file]
+    DOWNLOAD --> U
+```
+
+The repository workflow executes untrusted project code only inside Docker.
+The single-file workflow treats uploaded content as text, sends it to Gemini for
+review or revision, and keeps the working copy in the browser.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph CLIENT[Browser client]
+        DASH[Dashboard<br/>HTML, CSS, JavaScript]
+        REPOUI[Repository form<br/>progress and report]
+        FILEUI[Right-side file editor<br/>analysis and chat]
+        APIUSER[API client or interactive docs]
+        DASH --> REPOUI
+        DASH --> FILEUI
+    end
+
+    subgraph API[FastAPI application]
+        MAIN[App entry point<br/>static UI and error handling]
+        AR[Analysis router<br/>POST /api/analyze]
+        RR[Repair router<br/>POST /api/repair]
+        FR[File router<br/>POST /api/file/analyze<br/>POST /api/file/assist]
+        MAIN --> AR
+        MAIN --> RR
+        MAIN --> FR
+    end
+
+    subgraph REPOSITORY[Repository pipeline]
+        RS[Repository service]
+        PD[Python detector]
+        DS[Docker service]
+        PS[pytest and JUnit parser]
+        AS[Analysis service]
+        RPS[Repair service and agent]
+        TOOLS[Bounded repository tools]
+        RUNNER[Docker test runner]
+
+        RS --> PD --> DS --> PS --> AS
+        AS --> RPS
+        RPS --> TOOLS
+        RPS --> RUNNER
+        RUNNER --> DS
+    end
+
+    subgraph FILE[Single-file pipeline]
+        FWS[File workspace service]
+        VALIDATE[Name, type, text, and size validation]
+        GUARD[Answer/edit response guard]
+        FWS --> VALIDATE
+    end
+
+    subgraph EXTERNAL[External and isolated systems]
+        GH[(Public GitHub)]
+        GEMINI[Gemini API<br/>primary and fallback models]
+        ENGINE[Docker engine<br/>network-disabled test container]
+        WORKSPACE[(Per-job workspace<br/>repository, JUnit, diff)]
+    end
+
+    REPOUI -->|JSON over HTTP| AR
+    APIUSER -->|JSON over HTTP| RR
+    FILEUI -->|File text and prompt over HTTP| FR
+    AR --> RS
+    RR --> RS
+    RR --> RPS
+    FR --> FWS
+    RS --> GH
+    RS --> WORKSPACE
+    TOOLS --> WORKSPACE
+    DS --> ENGINE
+    AS --> GEMINI
+    RPS --> GEMINI
+    VALIDATE -->|Safe untrusted text| GEMINI
+    GEMINI -->|Structured file response| GUARD
+    GUARD --> FWS
+    AR -->|Structured result| REPOUI
+    RR -->|Validated diff and test state| REPOUI
+    FR -->|Flaws, answer, or revised content| FILEUI
+```
+
+The current dashboard uses synchronous HTTP requests. Repository source is
+cloned into a per-job workspace; tests run in a network-disabled Docker
+container; Gemini receives bounded context; and no workflow pushes to the
+remote repository. The file workspace does not write uploads into a repository
+or server-side job workspace.
 
 ### Repository analysis
 
