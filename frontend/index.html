@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="FixFlow — containerized Python repository QA analysis"
+    />
+    <title>FixFlow — Python QA Analyzer</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <button id="mobile-menu" class="mobile-menu icon-button" type="button" aria-label="Open navigation">
+      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+    </button>
+
+    <nav id="sidebar" class="sidebar" aria-label="Primary navigation">
+      <div class="brand-row">
+        <button id="collapse-sidebar" class="icon-button collapse-button" type="button" aria-label="Collapse navigation">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+        </button>
+        <a class="brand" href="/" aria-label="FixFlow home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32"><path d="M12 9 6 16l6 7M20 9l6 7-6 7M18 6l-4 20" /></svg>
+          </span>
+          <span class="brand-copy"><b>FixFlow</b><small>PHASE 1 · v0.1</small></span>
+        </a>
+      </div>
+
+      <div class="nav-label">Workspace</div>
+      <ul class="nav-list">
+        <li>
+          <a class="nav-link active" href="#dashboard">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 13h7V4H4v9Zm0 7h7v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z" /></svg>
+            <span>Dashboard</span>
+          </a>
+        </li>
+        <li>
+          <a class="nav-link" href="#results">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 20V10m7 10V4m7 16v-7" /></svg>
+            <span>Analysis report</span>
+          </a>
+        </li>
+        <li>
+          <a class="nav-link" href="/docs" target="_blank" rel="noreferrer">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7V3Zm8 0v5h4M10 12h6M10 16h6" /></svg>
+            <span>API reference</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="sidebar-bottom">
+        <div id="runtime-status" class="runtime-status">
+          <i></i>
+          <span><b>Service ready</b><small>Waiting for repository</small></span>
+        </div>
+        <div class="phase-note">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7l-8-4Zm0 5v5m0 3h.01" /></svg>
+          <span><b>Analysis only</b><small>No files are modified</small></span>
+        </div>
+      </div>
+    </nav>
+    <div id="sidebar-scrim" class="sidebar-scrim"></div>
+
+    <main id="app-main" class="app-main">
+      <section id="dashboard" class="dashboard-column">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">AUTONOMOUS QA · PYTHON</p>
+            <h1>Repository intelligence,<br /><em>without the guesswork.</em></h1>
+            <p class="page-copy">Clone safely, test inside Docker, collect every failure, and turn raw traces into focused root-cause analysis.</p>
+          </div>
+          <a class="docs-button" href="/docs" target="_blank" rel="noreferrer">
+            API docs
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 17 17 7M9 7h8v8" /></svg>
+          </a>
+        </header>
+
+        <section class="analyze-panel glass-panel">
+          <form id="analyze-form">
+            <label for="repository-url">Public GitHub repository</label>
+            <div class="url-row">
+              <div class="url-input-wrap">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.1 1.1M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.1-1.1" /></svg>
+                <input
+                  id="repository-url"
+                  name="repository_url"
+                  type="url"
+                  placeholder="https://github.com/owner/python-project.git"
+                  autocomplete="url"
+                  spellcheck="false"
+                  required
+                />
+              </div>
+              <button id="analyze-button" class="primary-button" type="submit">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 1.4 4.1L18 8.5l-4.6 1.4L12 14l-1.4-4.1L6 8.5l4.6-1.4L12 3Zm6 11 .8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8L18 14Z" /></svg>
+                <span>Analyze repository</span>
+              </button>
+            </div>
+            <div class="form-meta">
+              <span>Public GitHub · Python only</span>
+              <span>Execution stays inside Docker</span>
+            </div>
+          </form>
+        </section>
+
+        <section id="progress-panel" class="progress-panel panel" aria-live="polite">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">EXECUTION PIPELINE</p>
+              <h2 id="progress-title">Ready to analyze</h2>
+            </div>
+            <span id="progress-badge" class="status-badge idle">IDLE</span>
+          </div>
+
+          <div id="progress-track" class="progress-track"><span></span></div>
+
+          <div class="pipeline-layout">
+            <ol id="pipeline-steps" class="pipeline-steps">
+              <li data-step="clone">
+                <span class="step-marker">1</span>
+                <span><b>Clone repository</b><small>Isolated job workspace</small></span>
+              </li>
+              <li data-step="detect">
+                <span class="step-marker">2</span>
+                <span><b>Detect Python</b><small>Inspect dependency markers</small></span>
+              </li>
+              <li data-step="docker">
+                <span class="step-marker">3</span>
+                <span><b>Build container</b><small>Install project dependencies</small></span>
+              </li>
+              <li data-step="pytest">
+                <span class="step-marker">4</span>
+                <span><b>Run pytest</b><small>Capture every test failure</small></span>
+              </li>
+              <li data-step="gemini">
+                <span class="step-marker">5</span>
+                <span><b>Analyze causes</b><small>Gemini structured review</small></span>
+              </li>
+            </ol>
+
+            <div class="terminal-card">
+              <div class="terminal-bar">
+                <span class="terminal-dots"><i></i><i></i><i></i></span>
+                <span id="terminal-title">fixflow / activity.log</span>
+                <button id="clear-log" type="button">Clear</button>
+              </div>
+              <div id="activity-log" class="activity-log" role="log">
+                <p><span class="log-info">[READY]</span> Submit a public Python repository to begin.</p>
+                <p><span class="log-note">[NOTE]</span> Phase 1 returns after the complete workflow finishes.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="results" class="results-section">
+          <div class="section-heading results-heading">
+            <div>
+              <p class="section-kicker">PYTEST REPORT</p>
+              <h2>Analysis summary</h2>
+            </div>
+            <span id="repository-name" class="repository-chip">No run yet</span>
+          </div>
+
+          <div class="metrics-grid">
+            <article class="metric-card total">
+              <span>Collected</span><strong id="metric-total">—</strong><small>Total tests</small>
+            </article>
+            <article class="metric-card passed">
+              <span>Passed</span><strong id="metric-passed">—</strong><small>Healthy tests</small>
+            </article>
+            <article class="metric-card failed">
+              <span>Failed</span><strong id="metric-failed">—</strong><small>Issues found</small>
+            </article>
+            <article class="metric-card skipped">
+              <span>Skipped</span><strong id="metric-skipped">—</strong><small>Not executed</small>
+            </article>
+          </div>
+
+          <div class="issues-header">
+            <div>
+              <p class="section-kicker">ROOT-CAUSE ANALYSIS</p>
+              <h2>Detected failures</h2>
+            </div>
+            <button id="toggle-output" class="secondary-button" type="button" disabled>
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m8 9 4 4 4-4" /></svg>
+              Pytest output
+            </button>
+          </div>
+
+          <div id="result-message" class="empty-state">
+            <span class="empty-state-icon">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 7 3 12l5 5M16 7l5 5-5 5M14 4l-4 16" /></svg>
+            </span>
+            <h3>No analysis yet</h3>
+            <p>Your test failures and Gemini findings will appear here.</p>
+          </div>
+
+          <div id="issues-list" class="issues-list"></div>
+
+          <div id="pytest-output-panel" class="output-panel" hidden>
+            <div class="output-toolbar">
+              <span>Complete pytest output</span>
+              <button id="copy-output" type="button">Copy</button>
+            </div>
+            <pre id="pytest-output">No output available.</pre>
+          </div>
+        </section>
+
+        <footer>
+          <span>FixFlow Phase 1</span>
+          <span>Analyze · Understand · Prepare</span>
+        </footer>
+      </section>
+
+      <aside id="inspector" class="inspector">
+        <div class="inspector-header">
+          <div class="assistant-avatar">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 3h6M12 3v3M5 9h14v10H5V9Zm4 4h.01M15 13h.01M9 17h6" /></svg>
+          </div>
+          <div><h2>Result inspector</h2><p><i></i> Analysis context</p></div>
+        </div>
+
+        <div id="inspector-content" class="inspector-content">
+          <div class="inspector-welcome">
+            <span class="inspector-orb">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 1.4 4.1L18 8.5l-4.6 1.4L12 14l-1.4-4.1L6 8.5l4.6-1.4L12 3Z" /></svg>
+            </span>
+            <h3>Select a failure</h3>
+            <p>Run an analysis, then choose any failure to inspect its root cause and suggested fix.</p>
+          </div>
+        </div>
+
+        <div class="inspector-footnote">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7l-8-4Z" /></svg>
+          Gemini only analyzes in Phase 1. Verify suggestions before applying them.
+        </div>
+      </aside>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <template id="issue-template">
+      <article class="issue-card">
+        <span class="issue-accent"></span>
+        <div class="issue-main">
+          <div class="issue-title-row">
+            <span class="confidence-badge"></span>
+            <h3 class="issue-title"></h3>
+          </div>
+          <p class="issue-location"></p>
+          <p class="issue-summary"></p>
+        </div>
+        <button class="view-issue" type="button">
+          Inspect
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" /></svg>
+        </button>
+      </article>
+    </template>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
