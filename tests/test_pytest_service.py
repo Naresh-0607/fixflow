@@ -1,9 +1,5 @@
-import pytest
-
-from app.core.exceptions import TestExecutionError as ExecutionError
 from app.services.docker_service import DockerRunResult
 from app.services.pytest_service import PytestService
-
 
 FAILED_OUTPUT = """
 ============================= test session starts =============================
@@ -162,7 +158,7 @@ FAILED tests/test_api.py::test_missing - Expected status 404, received 200
     assert result.failures[0].error == "Expected status 404, received 200"
 
 
-def test_parser_rejects_missing_junit_results(tmp_path):
+def test_parser_falls_back_when_junit_results_are_missing(tmp_path):
     run = DockerRunResult(
         stdout="404 failed, 404 passed",
         stderr="",
@@ -171,8 +167,73 @@ def test_parser_rejects_missing_junit_results(tmp_path):
         job_id="job-missing-junit",
     )
 
-    with pytest.raises(ExecutionError) as error:
-        PytestService().parse(run)
+    result = PytestService().parse(run)
 
-    assert error.value.job_id == "job-missing-junit"
-    assert "JUnit XML" in error.value.message
+    assert result.status == "failed"
+    assert result.total == 1
+    assert result.failed == 1
+    assert result.failures[0].test == "pytest::unparsed_failure"
+    assert "could not be parsed" in result.failures[0].error
+
+
+def test_parser_handles_multiple_failures_without_junit(tmp_path):
+    output = """
+FAILED tests/test_user.py::test_login - AssertionError
+FAILED tests/test_user.py::test_logout - RuntimeError
+2 failed, 4 passed in 0.20s
+"""
+    result = PytestService().parse(
+        DockerRunResult(
+            stdout=output,
+            stderr="",
+            exit_code=1,
+            junit_xml_path=tmp_path / "missing.xml",
+        )
+    )
+
+    assert result.status == "failed"
+    assert (result.total, result.passed, result.failed) == (6, 4, 2)
+    assert [item.test for item in result.failures] == [
+        "tests/test_user.py::test_login",
+        "tests/test_user.py::test_logout",
+    ]
+
+
+def test_parser_strips_ansi_and_extracts_traceback(tmp_path):
+    output = """
+=================================== FAILURES ===================================
+_______________________________ test_login ________________________________
+    assert result == expected
+E   AssertionError: assert 'no' == 'yes'
+tests/test_user.py:12: AssertionError
+\x1b[31mFAILED\x1b[0m tests/test_user.py::test_login - AssertionError
+\x1b[31m1 failed\x1b[0m in 0.10s
+"""
+    result = PytestService().parse(
+        DockerRunResult(
+            stdout=output,
+            stderr="",
+            exit_code=1,
+            junit_xml_path=tmp_path / "missing.xml",
+        )
+    )
+
+    assert result.failed == 1
+    assert result.failures[0].file == "tests/test_user.py"
+    assert "assert 'no' == 'yes'" in result.failures[0].trace
+    assert "\x1b" not in result.output
+
+
+def test_parser_handles_exit_five_without_junit(tmp_path):
+    result = PytestService().parse(
+        DockerRunResult(
+            stdout="collected 0 items\n\nno tests ran in 0.01s\n",
+            stderr="",
+            exit_code=5,
+            junit_xml_path=tmp_path / "missing.xml",
+        )
+    )
+
+    assert result.status == "no_tests"
+    assert result.total == 0
+    assert result.failures == []

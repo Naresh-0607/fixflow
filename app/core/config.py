@@ -1,9 +1,9 @@
 import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(dotenv_path=PROJECT_ROOT / ".env")
@@ -65,6 +65,12 @@ class Settings:
     max_search_results: int = 100
     gemini_max_retries: int = 2
     gemini_retry_backoff_seconds: float = 1.0
+    max_file_upload_bytes: int = 1_000_000
+    file_workspace_ttl_seconds: int = 900
+    inception_api_key: str | None = None
+    fixflow_fix_model: str = "mercury-2"
+    fixflow_fix_provider: str = "mercury"
+    fixflow_fix_timeout_seconds: int = 6
 
     @property
     def gemini_model(self) -> str:
@@ -77,8 +83,11 @@ class Settings:
         workspace_root = (
             Path(workspace_value).expanduser().resolve()
             if workspace_value
-            else PROJECT_ROOT / "workspaces"
+            else Path(tempfile.gettempdir()) / "fixflow-workspaces"
         )
+        fix_provider = (os.getenv("FIXFLOW_FIX_PROVIDER") or "mercury").strip().lower()
+        if fix_provider not in {"mercury", "gemini"}:
+            raise RuntimeError("FIXFLOW_FIX_PROVIDER must be mercury or gemini")
         return cls(
             workspace_root=workspace_root,
             gemini_api_key=os.getenv("GEMINI_API_KEY") or None,
@@ -122,6 +131,20 @@ class Settings:
             gemini_max_retries=_positive_int("GEMINI_MAX_RETRIES", 2),
             gemini_retry_backoff_seconds=_non_negative_float(
                 "GEMINI_RETRY_BACKOFF_SECONDS", 1.0
+            ),
+            max_file_upload_bytes=_positive_int(
+                "MAX_FILE_UPLOAD_BYTES", 1_000_000
+            ),
+            file_workspace_ttl_seconds=_positive_int(
+                "FILE_WORKSPACE_TTL_SECONDS", 900
+            ),
+            inception_api_key=_optional_string("INCEPTION_API_KEY"),
+            fixflow_fix_model=(
+                _optional_string("FIXFLOW_FIX_MODEL") or "mercury-2"
+            ),
+            fixflow_fix_provider=fix_provider,
+            fixflow_fix_timeout_seconds=_positive_int(
+                "FIXFLOW_FIX_TIMEOUT_SECONDS", 6
             ),
         )
 

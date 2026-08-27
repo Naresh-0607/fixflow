@@ -39,7 +39,7 @@ class AnalyzeResponse(BaseModel):
     job_id: str
     language: Literal["python"]
     repository: str
-    docker_status: Literal["success"]
+    docker_status: Literal["success", "failed"]
     tests: TestResult
     status: Literal[
         "issues_found",

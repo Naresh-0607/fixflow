@@ -44,7 +44,7 @@ class DockerDaemonUnavailableError(FixFlowError):
 
 
 class DockerExecutionError(FixFlowError):
-    status_code = 422
+    status_code = 500
     error_code = "docker_execution_failed"
 
 
@@ -54,7 +54,7 @@ class DockerTimeoutError(FixFlowError):
 
 
 class TestExecutionError(FixFlowError):
-    status_code = 422
+    status_code = 500
     error_code = "test_execution_failed"
 
 
@@ -66,6 +66,11 @@ class ExecutionTimeoutError(FixFlowError):
 class GeminiAnalysisError(FixFlowError):
     status_code = 502
     error_code = "gemini_analysis_failed"
+
+
+class MercuryRepairError(FixFlowError):
+    status_code = 502
+    error_code = "mercury_repair_failed"
 
 
 class UnsafeModificationError(FixFlowError):
@@ -86,3 +91,33 @@ class RepositoryStateError(FixFlowError):
 class PipelineExecutionError(FixFlowError):
     status_code = 500
     error_code = "pipeline_execution_failed"
+
+
+class InvalidFileUpload(FixFlowError):
+    status_code = 422
+    error_code = "invalid_file_upload"
+
+
+class FileTooLargeError(FixFlowError):
+    status_code = 413
+    error_code = "file_too_large"
+
+
+class FileWorkspaceNotFound(FixFlowError):
+    status_code = 404
+    error_code = "file_workspace_not_found"
+
+
+class FileRepairError(FixFlowError):
+    status_code = 422
+    error_code = "file_repair_failed"
+
+
+class RepositoryWorkspaceNotFound(FixFlowError):
+    status_code = 404
+    error_code = "repository_workspace_not_found"
+
+
+class RepositoryFixError(FixFlowError):
+    status_code = 422
+    error_code = "repository_fix_failed"

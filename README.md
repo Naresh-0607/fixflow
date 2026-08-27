@@ -19,13 +19,13 @@ FixFlow exposes two repository workflows and a focused file workspace:
 - **Repair** runs the same analysis, asks Gemini for bounded unified-diff
   changes, retests the entire suite, rolls back regressions, and reflects on
   remaining failures until the tests pass or a safe stop condition is reached.
-- **File workspace** opens an uploaded text/code file in the right-side editor,
-  performs a flaw analysis before enabling chat, applies only explicitly
-  requested edits, and lets the user download the revised browser copy.
+- **File Analyzer** loads an uploaded Python file in the center editor
+  immediately, analyzes it only when requested, and keeps chat read-only.
+  Repairs run only through **Fix Now**, are validated, diffed, and downloadable.
 
 Repository analysis and repair support public Python repositories hosted on
-GitHub. The file workspace accepts the supported text and source-code formats
-shown in the upload panel and never executes uploaded content.
+GitHub. File Analyzer currently accepts UTF-8 `.py` files and never executes
+uploaded content.
 
 ## Application flow
 
@@ -53,11 +53,11 @@ flowchart TD
 
     CHOICE -->|Single file| UPLOAD[Upload supported text or code file]
     UPLOAD --> EDITOR[Load content in right-side editor]
-    EDITOR --> REVIEW[Automatic flaw analysis]
-    REVIEW --> CHAT[Enable questions and change requests]
-    CHAT --> ACTION{Assistant response}
+    EDITOR --> REVIEW[User starts file analysis]
+    REVIEW --> CHAT[Enable read-only questions]
+    CHAT --> ACTION{User action}
     ACTION -->|Question| ANSWER[Answer without changing editor content]
-    ACTION -->|Requested edit| EDIT[Apply complete validated revision]
+    ACTION -->|Fix Now| EDIT[Apply and validate minimal revision]
     ANSWER --> CHAT
     EDIT --> CHAT
     CHAT --> DOWNLOAD[Review and download revised file]
@@ -65,8 +65,9 @@ flowchart TD
 ```
 
 The repository workflow executes untrusted project code only inside Docker.
-The single-file workflow treats uploaded content as text, sends it to Gemini for
-review or revision, and keeps the working copy in the browser.
+The single-file workflow treats uploaded content as untrusted text, preserves an
+immutable server-side original, and confines current and artifact copies to an
+expiring per-file workspace.
 
 ## Architecture
 
@@ -75,7 +76,7 @@ flowchart LR
     subgraph CLIENT[Browser client]
         DASH[Dashboard<br/>HTML, CSS, JavaScript]
         REPOUI[Repository form<br/>progress and report]
-        FILEUI[Right-side file editor<br/>analysis and chat]
+        FILEUI[File Analyzer<br/>editor, findings, diff, and chat]
         APIUSER[API client or interactive docs]
         DASH --> REPOUI
         DASH --> FILEUI
@@ -85,7 +86,7 @@ flowchart LR
         MAIN[App entry point<br/>static UI and error handling]
         AR[Analysis router<br/>POST /api/analyze]
         RR[Repair router<br/>POST /api/repair]
-        FR[File router<br/>POST /api/file/analyze<br/>POST /api/file/assist]
+        FR[File router<br/>analyze, fix, chat, download]
         MAIN --> AR
         MAIN --> RR
         MAIN --> FR
@@ -111,7 +112,7 @@ flowchart LR
     subgraph FILE[Single-file pipeline]
         FWS[File workspace service]
         VALIDATE[Name, type, text, and size validation]
-        GUARD[Answer/edit response guard]
+        GUARD[Read-only chat and repair validation]
         FWS --> VALIDATE
     end
 
@@ -124,7 +125,7 @@ flowchart LR
 
     REPOUI -->|JSON over HTTP| AR
     APIUSER -->|JSON over HTTP| RR
-    FILEUI -->|File text and prompt over HTTP| FR
+    FILEUI -->|Multipart file and JSON over HTTP| FR
     AR --> RS
     RR --> RS
     RR --> RPS
@@ -140,14 +141,14 @@ flowchart LR
     GUARD --> FWS
     AR -->|Structured result| REPOUI
     RR -->|Validated diff and test state| REPOUI
-    FR -->|Flaws, answer, or revised content| FILEUI
+    FR -->|Findings, answer, diff, or fixed file| FILEUI
 ```
 
 The current dashboard uses synchronous HTTP requests. Repository source is
 cloned into a per-job workspace; tests run in a network-disabled Docker
 container; Gemini receives bounded context; and no workflow pushes to the
-remote repository. The file workspace does not write uploads into a repository
-or server-side job workspace.
+remote repository. File uploads use a separate `files/<file-id>` tree under
+the configured runtime workspace and are removed after 15 minutes of inactivity.
 
 ### Repository analysis
 
@@ -282,9 +283,10 @@ source .venv-wsl/bin/activate
 uvicorn app.main:app --reload --reload-dir app
 ```
 
-Do not use an unrestricted `--reload` from the FixFlow root. Analysis clones
-Python files into `workspaces/`, and watching that directory can restart the
-server while `/api/analyze` is still running.
+FixFlow defaults runtime workspaces to the operating system temporary directory
+(`fixflow-workspaces`), so unrestricted reload watching does not see cloned or
+repaired source. If `FIXFLOW_WORKSPACE_ROOT` points inside the project, keep
+`--reload-dir app` or explicitly exclude the configured workspace path.
 
 For production or a stable local run, disable reload entirely:
 
@@ -348,6 +350,22 @@ changes, modified files, additions, deletions, and the final uncommitted diff.
 
 Requests are synchronous: the HTTP request remains open while cloning, building,
 testing, analyzing, and—when requested—repairing the repository.
+
+### Analyze and repair one file
+
+`POST /api/files/analyze` accepts one multipart field named `file`. It stores an
+immutable original, returns the UTF-8 source plus structured findings, and does
+not modify the source. The returned `file_id` is used by the remaining routes:
+
+- `POST /api/files/{file_id}/fix` creates and validates a minimal repair, runs
+  analysis again, and returns the updated source, findings, metrics, and diff.
+- `GET /api/files/{file_id}/download` downloads the current `.py` file directly.
+- `POST /api/files/{file_id}/chat` accepts `{"message": "..."}` and provides a
+  read-only answer scoped to that file. Edit requests are directed to Fix Now.
+
+Single-file workspaces use `original/`, `current/`, and `artifacts/` directories
+under `workspaces/files/<file-id>/`. A background cleanup task removes them after
+15 minutes of inactivity by default.
 
 ## Test results and comparison
 

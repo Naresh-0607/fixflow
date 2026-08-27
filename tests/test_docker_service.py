@@ -6,6 +6,8 @@ from app.core.exceptions import (
     DockerCLIUnavailableError,
     DockerDaemonUnavailableError,
     DockerTimeoutError,
+)
+from app.core.exceptions import (
     TestExecutionError as ExecutionError,
 )
 from app.services.docker_service import DockerService
@@ -94,26 +96,47 @@ def test_pytest_exit_code_one_remains_a_valid_test_result(
     assert result.exit_code == 1
 
 
-def test_pytest_internal_error_is_not_treated_as_a_qa_result(
+@pytest.mark.parametrize("exit_code", [2, 3, 4, 5])
+def test_standard_pytest_exit_codes_are_preserved_for_analysis(
     monkeypatch,
     test_settings,
     tmp_path,
+    exit_code,
 ):
     service = DockerService(test_settings, docker_path="/usr/bin/docker")
 
     def fake_run(command, *, timeout):
-        return subprocess.CompletedProcess(command, 3, "INTERNALERROR", "")
+        return subprocess.CompletedProcess(command, exit_code, "pytest result", "")
+
+    monkeypatch.setattr(service, "_run_command", fake_run)
+
+    result = service.run_pytest(
+        job_id="job-pytest-result",
+        image_tag="fixflow-test:phase1",
+        artifacts_path=tmp_path / "artifacts",
+    )
+
+    assert result.exit_code == exit_code
+
+
+def test_unexpected_pytest_exit_code_is_an_internal_error(
+    monkeypatch, test_settings, tmp_path
+):
+    service = DockerService(test_settings, docker_path="/usr/bin/docker")
+
+    def fake_run(command, *, timeout):
+        return subprocess.CompletedProcess(command, 17, "unexpected", "")
 
     monkeypatch.setattr(service, "_run_command", fake_run)
 
     with pytest.raises(ExecutionError) as error:
         service.run_pytest(
-            job_id="job-internal-error",
+            job_id="job-unexpected-result",
             image_tag="fixflow-test:phase1",
             artifacts_path=tmp_path / "artifacts",
         )
 
-    assert "internal error" in error.value.message
+    assert error.value.status_code == 500
 
 
 def test_docker_cli_missing_has_specific_error(monkeypatch, test_settings):
