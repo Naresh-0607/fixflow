@@ -1,0 +1,52 @@
+name: FixFlow Repository Analysis
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: "Repository URL to analyze"
+        required: true
+        type: string
+
+      repo_id:
+        description: "FixFlow repository job ID"
+        required: true
+        type: string
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout FixFlow
+        uses: actions/checkout@v4
+
+      - name: Show job information
+        run: |
+          echo "Repo ID: ${{ inputs.repo_id }}"
+          echo "Target repository: ${{ inputs.repo_url }}"
+
+      - name: Verify Python
+        run: python --version
+
+      - name: Verify Docker
+        run: |
+          docker --version
+          docker info
+
+      - name: Clone target repository
+        run: |
+          git clone "${{ inputs.repo_url }}" target-repository
+
+      - name: Show cloned repository
+        run: |
+          cd target-repository
+          ls -la
+
+      - name: Test Docker
+        run: |
+          docker run --rm python:3.12-slim python --version
+
+      - name: Finish
+        run: |
+          echo "FixFlow GitHub Actions environment works."
