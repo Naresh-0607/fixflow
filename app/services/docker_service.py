@@ -317,13 +317,18 @@ class DockerService:
                 },
             )
 
-        if result.returncode not in {0, 1, 2, 5}:
+        # pytest exit codes 1-5 are completed pytest runs, not malformed API
+        # requests. Preserve their output so the analysis layer can report a
+        # failed/no-tests/setup-error state instead of converting them to 4xx.
+        if result.returncode not in {0, 1, 2, 3, 4, 5}:
             if result.returncode == 127 or "No module named pytest" in output:
                 message = "pytest was not found inside the container."
             elif result.returncode == 3:
                 message = "pytest encountered an internal error inside the container."
             elif result.returncode == 4:
-                message = "pytest was invoked with invalid arguments inside the container."
+                message = (
+                    "pytest was invoked with invalid arguments inside the container."
+                )
             else:
                 message = "pytest could not complete inside the container."
             logger.error(
@@ -335,7 +340,10 @@ class DockerService:
             raise TestExecutionError(
                 message,
                 job_id=job_id,
-                details={"exit_code": result.returncode, "pytest_output": output[-12_000:]},
+                details={
+                    "exit_code": result.returncode,
+                    "pytest_output": output[-12_000:],
+                },
             )
 
         return DockerRunResult(
@@ -360,7 +368,11 @@ class DockerService:
                     result.returncode,
                     self._one_line(self._combined_output(result)),
                 )
-        except (DockerCLIUnavailableError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        except (
+            DockerCLIUnavailableError,
+            FileNotFoundError,
+            subprocess.TimeoutExpired,
+        ) as exc:
             logger.warning(
                 "[FixFlow] job=%s Docker image cleanup did not complete error=%s",
                 job_id,
@@ -374,7 +386,11 @@ class DockerService:
                 [docker_path, "container", "rm", "--force", container_name],
                 timeout=20,
             )
-        except (DockerCLIUnavailableError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        except (
+            DockerCLIUnavailableError,
+            FileNotFoundError,
+            subprocess.TimeoutExpired,
+        ) as exc:
             logger.warning(
                 "[FixFlow] job=%s timed-out container cleanup failed name=%s error=%s",
                 job_id,
@@ -407,7 +423,9 @@ class DockerService:
         return commands[strategy]
 
     @staticmethod
-    def _run_command(command: list[str], *, timeout: int) -> subprocess.CompletedProcess[str]:
+    def _run_command(
+        command: list[str], *, timeout: int
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             command,
             capture_output=True,

@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import subprocess
 import uuid
 from dataclasses import dataclass
@@ -9,7 +10,6 @@ from urllib.parse import urlparse
 from ..core.config import Settings
 from ..core.exceptions import CloneError, ExecutionTimeoutError, InvalidRepositoryUrl
 from ..core.logging import logger
-
 
 GITHUB_PART_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 
@@ -21,6 +21,7 @@ class RepositoryJob:
     workspace: Path
     repository_path: Path
     clone_url: str
+    original_path: Path | None = None
 
 
 class RepositoryService:
@@ -53,8 +54,7 @@ class RepositoryService:
             )
 
         owner, repository = parts
-        if repository.endswith(".git"):
-            repository = repository[:-4]
+        repository = repository.removesuffix(".git")
         if not owner or not repository or not all(
             GITHUB_PART_PATTERN.fullmatch(part) for part in (owner, repository)
         ):
@@ -77,6 +77,34 @@ class RepositoryService:
             repository_path=repository_path,
             clone_url=clone_url,
         )
+
+    def create_managed_job(self, repository_url: str) -> RepositoryJob:
+        """Create the persistent original/current layout used by repository issue fixes."""
+        clone_url, repository_name = self.validate_public_github_url(repository_url)
+        job_id = uuid.uuid4().hex
+        self.settings.workspace_root.mkdir(parents=True, exist_ok=True)
+        workspace = self.settings.workspace_root / job_id
+        repository_root = workspace / "repo"
+        repository_root.mkdir(parents=True, exist_ok=False)
+        return RepositoryJob(
+            job_id=job_id,
+            repository_name=repository_name,
+            workspace=workspace,
+            repository_path=repository_root / "current",
+            original_path=repository_root / "original",
+            clone_url=clone_url,
+        )
+
+    @staticmethod
+    def snapshot_original(job: RepositoryJob) -> None:
+        if job.original_path is None:
+            return
+        if not job.repository_path.is_dir() or job.original_path.exists():
+            raise CloneError(
+                "The managed repository workspace could not be initialized.",
+                job_id=job.job_id,
+            )
+        shutil.copytree(job.repository_path, job.original_path, symlinks=True)
 
     def clone(self, job: RepositoryJob) -> None:
         environment = os.environ.copy()

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="FixFlow fast static analyzer for a single Python file" />
+    <title>File Analyzer - FixFlow</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <button id="mobile-menu" class="mobile-menu icon-button" type="button" aria-label="Open navigation">
+      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+    </button>
+
+    <nav id="sidebar" class="sidebar" aria-label="Primary navigation">
+      <div class="brand-row">
+        <button id="collapse-sidebar" class="icon-button collapse-button" type="button" aria-label="Collapse navigation">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+        </button>
+        <a class="brand" href="/" aria-label="FixFlow home">
+          <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M12 9 6 16l6 7M20 9l6 7-6 7M18 6l-4 20" /></svg></span>
+          <span class="brand-copy"><b>FixFlow</b><small>SECURE CODE WORKSPACE</small></span>
+        </a>
+      </div>
+
+      <div class="nav-label">Workspace</div>
+      <ul class="nav-list">
+        <li><a class="nav-link" href="/"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 13h7V4H4v9Zm0 7h7v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z" /></svg><span>Repository QA</span></a></li>
+        <li><a class="nav-link active" href="/file-analyzer"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6V3Zm8 0v5h4M9 12l-2 2 2 2m6-4 2 2-2 2m-2-6-2 8" /></svg><span>File Analyzer</span></a></li>
+      </ul>
+
+      <div class="sidebar-bottom">
+        <div id="runtime-status" class="runtime-status"><i></i><span><b>Service ready</b><small>Secure workspaces</small></span></div>
+        <div class="phase-note"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7l-8-4Zm0 5v5m0 3h.01" /></svg><span><b>Original protected</b><small>Repairs use a working copy</small></span></div>
+      </div>
+    </nav>
+    <div id="sidebar-scrim" class="sidebar-scrim"></div>
+
+    <main class="app-main">
+      <section class="file-workspace">
+        <header class="file-page-header">
+          <div><p class="eyebrow">AST + RUFF + SECURITY + COMPLEXITY</p><h1>File Analyzer</h1><p>Analyze one Python file quickly without containers, dependency installation, or code execution.</p></div>
+          <span id="file-state-badge" class="status-badge idle">NO FILE</span>
+        </header>
+
+        <section class="file-toolbar glass-panel">
+          <input id="file-input" type="file" accept=".py,text/x-python" hidden />
+          <button id="upload-file-button" class="secondary-button file-upload-button" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 16V4m0 0L8 8m4-4 4 4M5 15v5h14v-5" /></svg>Upload file</button>
+          <div class="file-identity"><strong id="file-name">No file selected</strong><small id="file-state-copy">Upload a Python file to begin</small></div>
+          <button id="analyze-file-button" class="primary-button" type="button" disabled><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 1.4 4.1L18 8.5l-4.6 1.4L12 14l-1.4-4.1L6 8.5l4.6-1.4L12 3Z" /></svg><span>Analyze file</span></button>
+        </section>
+
+        <section class="code-panel panel">
+          <div class="code-panel-bar"><div><i></i><i></i><i></i></div><span id="editor-filename">untitled.py</span><span>PYTHON - UTF-8</span></div>
+          <div class="code-editor" aria-label="Python code editor">
+            <div id="editor-gutter" class="editor-gutter" aria-hidden="true"><span>1</span></div>
+            <div class="editor-code-area"><div id="error-line-marker" class="error-line-marker" hidden></div><pre id="syntax-layer" class="syntax-layer" aria-hidden="true"><code></code></pre><textarea id="source-editor" aria-label="Source code" spellcheck="false" wrap="off" disabled placeholder="# Upload a Python file to begin"></textarea></div>
+          </div>
+          <div class="editor-status"><span id="cursor-position">Ln 1, Col 1</span><span id="analysis-origin">Static only - source never executed</span></div>
+        </section>
+
+        <section class="file-findings">
+          <div class="issues-header file-issues-header"><div><p class="section-kicker">RANKED REVIEW</p><h2>Detected issues</h2></div><strong id="file-issue-count">Not analyzed</strong></div>
+          <div id="file-empty-state" class="empty-state"><span class="empty-state-icon">&lt;/&gt;</span><h3>Upload a Python file to begin</h3><p>Files up to 1 MB are supported; the optimized target is about 1000 lines.</p></div>
+          <div id="file-issues-list" class="file-issues-list"></div>
+          <div class="file-actions">
+            <button id="fix-file-button" class="primary-button" type="button" disabled><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m14 6 4 4M4 20l3.5-.8L19 7.7a2.8 2.8 0 0 0-4-4L3.8 15.2 3 19l1 1Z" /></svg><span>Fix Now</span></button>
+            <button id="view-file-diff" class="secondary-button" type="button" hidden>View changes</button>
+            <a id="download-fixed-file" class="secondary-button download-button" href="#" hidden>Download fixed file</a>
+          </div>
+        </section>
+
+        <section id="repair-summary" class="repair-summary panel" hidden>
+          <div class="repair-metrics"><div><span>Before</span><strong id="before-issues">-</strong></div><div><span>After</span><strong id="after-issues">-</strong></div><div><span>Resolved</span><strong id="fixed-issues">-</strong></div><div><span>Lines changed</span><strong id="changed-lines">-</strong></div></div>
+          <div id="file-diff-panel" class="file-diff-panel" hidden><div class="output-toolbar"><span>Validated unified diff</span><button id="copy-file-diff" type="button">Copy</button></div><pre id="file-diff"></pre></div>
+        </section>
+        <footer><span>FixFlow single-file fast path</span><span>Static analysis - bounded AI review</span></footer>
+      </section>
+
+      <aside class="inspector file-chat">
+        <div class="inspector-header"><div class="assistant-avatar"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 3h6M12 3v3M5 9h14v10H5V9Zm4 4h.01M15 13h.01M9 17h6" /></svg></div><div><h2>FixFlow AI</h2><p><i></i> File context</p></div></div>
+        <div id="chat-messages" class="chat-messages" aria-live="polite"><div class="chat-welcome"><span>*</span><h3>Ask about this file</h3><p>Analyze a file, then ask about findings, risky lines, or validated changes.</p></div></div>
+        <form id="file-chat-form" class="chat-composer"><label for="chat-input" class="sr-only">Ask about this file</label><textarea id="chat-input" rows="2" maxlength="4000" placeholder="Ask about this file..." disabled></textarea><button id="chat-send" class="icon-button" type="submit" disabled aria-label="Send message"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 4 17 8-17 8 3-8-3-8Zm3 8h14" /></svg></button></form>
+        <div class="inspector-footnote"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7l-8-4Z" /></svg>Chat is read-only. All changes go through Fix Now and syntax validation.</div>
+      </aside>
+    </main>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/static/file-analyzer.js" defer></script>
+  </body>
+</html>
